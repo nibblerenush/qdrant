@@ -808,9 +808,15 @@ mod tests {
         for (i, &gpu_search_result) in gpu_responses.iter().enumerate() {
             let added_vector = test.vector_holder.vectors.get(num_vectors + i).to_vec();
             let mut scorer = test.vector_holder.get_scorer(added_vector.clone());
-            let search_result = test
-                .graph_layers_builder
-                .search_entry_on_level(0, 0, &mut scorer);
+            let search_result = test.graph_layers_builder.search_entry_on_level(
+                ScoredPointOffset {
+                    idx: 0,
+                    score: scorer.score_point(0),
+                },
+                0,
+                &mut scorer,
+                &mut Vec::new(),
+            );
             assert_eq!(search_result.idx, gpu_search_result);
         }
     }
