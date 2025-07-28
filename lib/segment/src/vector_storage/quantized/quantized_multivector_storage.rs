@@ -230,12 +230,11 @@ where
         multi_vector_config: &MultiVectorConfig,
     ) -> OperationResult<Self> {
         let offsets = TMultivectorOffsetsStorage::load(offsets_path)?;
-        // TODO: find a better way to get inner vectors count
-        let inner_vectors_count = if offsets.len() == 0 {
-            0
-        } else {
+        let inner_vectors_count = if offsets.len() > 0 {
             let offset = offsets.get_offset(offsets.len() as PointOffsetType - 1);
             offset.start as usize + offset.count as usize
+        } else {
+            0
         };
         Ok(Self {
             dim: vector_parameters.dim,

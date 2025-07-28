@@ -487,12 +487,13 @@ impl QuantizedVectors {
             PrimitiveVectorElement::quantization_preprocess(quantization_config, distance, v)
         });
         let inner_vectors_count = vectors.clone().count();
+        let vectors_count = vector_storage.total_vector_count();
         let on_disk_vector_storage = vector_storage.is_on_disk();
 
         let vector_parameters =
             Self::construct_vector_parameters(distance, dim, inner_vectors_count);
 
-        let offsets = (0..vector_storage.total_vector_count() as PointOffsetType)
+        let offsets = (0..vectors_count as PointOffsetType)
             .map(|idx| vector_storage.get_multi(idx).vectors_count() as PointOffsetType)
             .scan(0, |offset_acc, multi_vector_len| {
                 let offset = *offset_acc;
@@ -510,6 +511,7 @@ impl QuantizedVectors {
                 vectors,
                 offsets,
                 &vector_parameters,
+                vectors_count,
                 inner_vectors_count,
                 scalar_config,
                 multi_vector_config,
@@ -522,6 +524,7 @@ impl QuantizedVectors {
                     vectors,
                     offsets,
                     &vector_parameters,
+                    vectors_count,
                     inner_vectors_count,
                     pq_config,
                     multi_vector_config,
@@ -537,6 +540,7 @@ impl QuantizedVectors {
                 vectors,
                 offsets,
                 &vector_parameters,
+                vectors_count,
                 inner_vectors_count,
                 binary_config,
                 multi_vector_config,
@@ -764,6 +768,7 @@ impl QuantizedVectors {
         vectors: impl Iterator<Item = impl AsRef<[VectorElementType]> + 'a> + Clone,
         offsets: impl Iterator<Item = MultivectorOffset>,
         vector_parameters: &quantization::VectorParameters,
+        vectors_count: usize,
         inner_vectors_count: usize,
         scalar_config: &ScalarQuantizationConfig,
         multi_vector_config: MultiVectorConfig,
@@ -809,8 +814,7 @@ impl QuantizedVectors {
                 stopped,
             )?;
             let offsets_path = path.join(QUANTIZED_OFFSETS_PATH);
-            // TODO: use total vectors count instead of inner_vectors_count
-            create_offsets_file_from_iter(&offsets_path, inner_vectors_count, offsets)?;
+            create_offsets_file_from_iter(&offsets_path, vectors_count, offsets)?;
             Ok(QuantizedVectorStorage::ScalarMmapMulti(
                 QuantizedMultivectorStorage::new(
                     vector_parameters.dim,
@@ -875,6 +879,7 @@ impl QuantizedVectors {
         vectors: impl Iterator<Item = impl AsRef<[VectorElementType]> + 'a> + Clone + Send,
         offsets: impl Iterator<Item = MultivectorOffset>,
         vector_parameters: &quantization::VectorParameters,
+        vectors_count: usize,
         inner_vectors_count: usize,
         pq_config: &ProductQuantizationConfig,
         multi_vector_config: MultiVectorConfig,
@@ -927,8 +932,7 @@ impl QuantizedVectors {
                 stopped,
             )?;
             let offsets_path = path.join(QUANTIZED_OFFSETS_PATH);
-            // TODO: use total vectors count instead of inner_vectors_count
-            create_offsets_file_from_iter(&offsets_path, inner_vectors_count, offsets)?;
+            create_offsets_file_from_iter(&offsets_path, vectors_count, offsets)?;
             Ok(QuantizedVectorStorage::PQMmapMulti(
                 QuantizedMultivectorStorage::new(
                     vector_parameters.dim,
@@ -1022,6 +1026,7 @@ impl QuantizedVectors {
         vectors: impl Iterator<Item = impl AsRef<[VectorElementType]> + 'a> + Clone,
         offsets: impl Iterator<Item = MultivectorOffset>,
         vector_parameters: &quantization::VectorParameters,
+        vectors_count: usize,
         inner_vectors_count: usize,
         binary_config: &BinaryQuantizationConfig,
         multi_vector_config: MultiVectorConfig,
@@ -1099,8 +1104,7 @@ impl QuantizedVectors {
                 stopped,
             )?;
             let offsets_path = path.join(QUANTIZED_OFFSETS_PATH);
-            // TODO: use total vectors count instead of inner_vectors_count
-            create_offsets_file_from_iter(&offsets_path, inner_vectors_count, offsets)?;
+            create_offsets_file_from_iter(&offsets_path, vectors_count, offsets)?;
             Ok(QuantizedVectorStorage::BinaryMmapMulti(
                 QuantizedMultivectorStorage::new(
                     vector_parameters.dim,
