@@ -826,6 +826,7 @@ impl QuantizedVectors {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_pq<'a>(
         vectors: impl Iterator<Item = impl AsRef<[VectorElementType]> + 'a> + Clone + Send,
         vector_parameters: &quantization::VectorParameters,

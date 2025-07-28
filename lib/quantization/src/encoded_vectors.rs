@@ -17,6 +17,7 @@ pub enum DistanceType {
 pub struct VectorParameters {
     pub dim: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "count")]
     pub deprecated_count: Option<usize>,
     pub distance_type: DistanceType,
     pub invert: bool,
