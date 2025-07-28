@@ -6,7 +6,9 @@ use std::sync::Arc;
 use common::tar_ext::BuilderExt;
 use io::file_operations::read_json;
 use io::storage_version::StorageVersion as _;
-use segment::common::validate_snapshot_archive::open_snapshot_archive_with_validation;
+use segment::common::validate_snapshot_archive::{
+    open_snapshot_archive, validate_snapshot_archive,
+};
 use segment::data_types::segment_manifest::SegmentManifests;
 use segment::types::SnapshotFormat;
 use tokio::sync::OwnedRwLockReadGuard;
@@ -164,7 +166,9 @@ impl Collection {
         is_distributed: bool,
     ) -> CollectionResult<()> {
         // decompress archive
-        let mut ar = open_snapshot_archive_with_validation(snapshot_path)?;
+        validate_snapshot_archive(snapshot_path)?;
+
+        let mut ar = open_snapshot_archive(snapshot_path)?;
         ar.unpack(target_dir)?;
 
         let config = CollectionConfigInternal::load(target_dir)?;
@@ -306,28 +310,40 @@ impl Collection {
         is_distributed: bool,
         temp_dir: &Path,
         cancel: cancel::CancellationToken,
-    ) -> CollectionResult<()> {
-        // TODO:
-        //   Check that shard snapshot is compatible with the collection
-        //   (see `VectorsConfig::check_compatible_with_segment_config`)
+    ) -> CollectionResult<impl Future<Output = CollectionResult<()>>> {
+        let shard_holder = self.shards_holder.clone().read_owned().await;
 
-        // `ShardHolder::restore_shard_snapshot` is *not* cancel safe
-        // (see `ShardReplicaSet::restore_local_replica_from`)
-        self.shards_holder
-            .read()
-            .await
-            .restore_shard_snapshot(
-                snapshot_path,
-                recovery_type,
-                &self.path,
-                &self.name(),
-                shard_id,
-                this_peer_id,
-                is_distributed,
-                temp_dir,
-                cancel,
-            )
-            .await
+        shard_holder.validate_shard_snapshot(&snapshot_path).await?;
+
+        let snapshot_path = snapshot_path.to_path_buf();
+        let temp_dir = temp_dir.to_path_buf();
+
+        let collection_path = self.path.clone();
+        let collection_name = self.name();
+
+        let handle = tokio::spawn(async move {
+            shard_holder
+                .restore_shard_snapshot(
+                    &snapshot_path,
+                    recovery_type,
+                    &collection_path,
+                    &collection_name,
+                    shard_id,
+                    this_peer_id,
+                    is_distributed,
+                    &temp_dir,
+                    cancel,
+                )
+                .await
+        });
+
+        let result = async move {
+            handle
+                .await
+                .map_err(|err| CollectionError::service_error(format!("TODO: {err}")))?
+        };
+
+        Ok(result)
     }
 
     pub async fn assert_shard_exists(&self, shard_id: ShardId) -> CollectionResult<()> {
