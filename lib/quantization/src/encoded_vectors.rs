@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use common::counter::hardware_counter::HardwareCounterCell;
+use common::tbool::TBool;
 use serde::{Deserialize, Serialize};
 
 use crate::EncodingError;
@@ -50,6 +51,15 @@ pub trait EncodedVectors: Sized {
     /// Construct a query from stored vector, so it can be used for scoring.
     /// Some implementations may not support this, in which case they should return `None`.
     fn encode_internal_vector(&self, id: u32) -> Option<Self::EncodedQuery>;
+
+    type SupportsBytes: TBool;
+    fn score_bytes(
+        &self,
+        enabled: Self::SupportsBytes,
+        query: &Self::EncodedQuery,
+        bytes: &[u8],
+        hw_counter: &HardwareCounterCell,
+    ) -> f32;
 }
 
 pub trait EncodedVectorsBytes: EncodedVectors {
