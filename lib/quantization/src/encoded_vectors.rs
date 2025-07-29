@@ -16,9 +16,11 @@ pub enum DistanceType {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VectorParameters {
     pub dim: usize,
+
+    // Deprecated since `v1.15.2`, use `EncodedVectors::vectors_count` from quantization instead.
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "count")]
-    pub deprecated_count: Option<usize>,
+    pub count: Option<usize>,
     pub distance_type: DistanceType,
     pub invert: bool,
 }

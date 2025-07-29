@@ -1128,7 +1128,7 @@ impl QuantizedVectors {
     ) -> quantization::VectorParameters {
         quantization::VectorParameters {
             dim,
-            deprecated_count: Some(count),
+            count: Some(count),
             distance_type: match distance {
                 Distance::Cosine => quantization::DistanceType::Dot,
                 Distance::Euclid => quantization::DistanceType::L2,

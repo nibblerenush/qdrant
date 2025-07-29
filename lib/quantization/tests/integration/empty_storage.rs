@@ -16,7 +16,7 @@ mod tests {
         let vector_dim = 256;
         let vector_parameters = VectorParameters {
             dim: vector_dim,
-            deprecated_count: None,
+            count: None,
             distance_type: DistanceType::Dot,
             invert: false,
         };
@@ -55,7 +55,7 @@ mod tests {
         let vector_dim = 8;
         let vector_parameters = VectorParameters {
             dim: vector_dim,
-            deprecated_count: None,
+            count: None,
             distance_type: DistanceType::Dot,
             invert: false,
         };
@@ -95,7 +95,7 @@ mod tests {
         let vector_dim = 8;
         let vector_parameters = VectorParameters {
             dim: vector_dim,
-            deprecated_count: None,
+            count: None,
             distance_type: DistanceType::Dot,
             invert: true,
         };
