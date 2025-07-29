@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use common::counter::hardware_counter::HardwareCounterCell;
-use memory::mmap_type::MmapFlusher;
 use serde::{Deserialize, Serialize};
 
 use crate::EncodingError;
@@ -64,8 +63,6 @@ pub trait EncodedVectors: Sized {
     ) -> std::io::Result<()>;
 
     fn vectors_count(&self) -> usize;
-
-    fn flusher(&self) -> MmapFlusher;
 }
 
 impl DistanceType {

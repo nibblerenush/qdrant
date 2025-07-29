@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use common::counter::hardware_counter::HardwareCounterCell;
 use io::file_operations::atomic_save_json;
-use memory::mmap_type::MmapFlusher;
 use serde::{Deserialize, Serialize};
 
 use crate::EncodingError;
@@ -555,10 +554,6 @@ impl<TStorage: EncodedStorage> EncodedVectors for EncodedVectorsU8<TStorage> {
             .vectors_count(Self::get_quantized_vector_size(
                 &self.metadata.vector_parameters,
             ))
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
     }
 }
 

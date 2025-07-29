@@ -4,7 +4,6 @@ use common::counter::hardware_counter::HardwareCounterCell;
 use memmap2::{Mmap, MmapMut};
 use memory::madvise;
 use memory::madvise::Madviseable;
-use memory::mmap_type::MmapFlusher;
 
 #[derive(Debug)]
 pub struct QuantizedMmapStorage {
@@ -36,10 +35,6 @@ impl quantization::EncodedStorage for QuantizedMmapStorage {
             std::io::ErrorKind::Unsupported,
             "Cannot push vector to mmap storage",
         ))
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
     }
 
     fn from_file(

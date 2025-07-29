@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use common::counter::hardware_counter::HardwareCounterCell;
 use io::file_operations::atomic_save_json;
-use memory::mmap_type::MmapFlusher;
 use serde::{Deserialize, Serialize};
 
 use crate::encoded_storage::{EncodedStorage, EncodedStorageBuilder};
@@ -601,9 +600,5 @@ impl<TStorage: EncodedStorage> EncodedVectors for EncodedVectorsPQ<TStorage> {
     fn vectors_count(&self) -> usize {
         self.encoded_vectors
             .vectors_count(self.metadata.vector_division.len())
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
     }
 }

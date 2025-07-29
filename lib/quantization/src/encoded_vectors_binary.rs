@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use common::counter::hardware_counter::HardwareCounterCell;
 use io::file_operations::atomic_save_json;
 use memory::mmap_ops::{transmute_from_u8_to_slice, transmute_to_u8_slice};
-use memory::mmap_type::MmapFlusher;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
@@ -917,10 +916,6 @@ impl<TBitsStoreType: BitsStoreType, TStorage: EncodedStorage> EncodedVectors
     fn vectors_count(&self) -> usize {
         self.encoded_vectors
             .vectors_count(self.get_quantized_vector_size())
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        self.encoded_vectors.flusher()
     }
 }
 

@@ -7,7 +7,6 @@ use std::path::Path;
 
 use common::counter::hardware_counter::HardwareCounterCell;
 use memory::fadvise::OneshotFile;
-use memory::mmap_type::MmapFlusher;
 
 use crate::common::vector_utils::{TrySetCapacity, TrySetCapacityExact};
 use crate::vector_storage::chunked_vector_storage::VectorOffsetType;
@@ -191,10 +190,6 @@ impl quantization::EncodedStorage for ChunkedVectors<u8> {
             .vector_io_write_counter()
             .incr_delta(size_of_val(vector));
         Ok(())
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
     }
 
     fn from_file(

@@ -5,15 +5,13 @@ use std::path::{Path, PathBuf};
 use common::counter::hardware_counter::HardwareCounterCell;
 use common::types::{PointOffsetType, ScoreType};
 use memmap2::MmapMut;
-use memory::mmap_type::{MmapFlusher, MmapSlice};
+use memory::mmap_type::MmapSlice;
 use quantization::{EncodedVectors, VectorParameters};
 use serde::{Deserialize, Serialize};
 
 use crate::common::operation_error::OperationResult;
 use crate::data_types::vectors::{TypedMultiDenseVectorRef, VectorElementType};
 use crate::types::{MultiVectorComparator, MultiVectorConfig};
-use crate::vector_storage::chunked_mmap_vectors::ChunkedMmapVectors;
-use crate::vector_storage::chunked_vector_storage::ChunkedVectorStorage;
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct MultivectorOffset {
@@ -34,8 +32,6 @@ pub trait MultivectorOffsetsStorage: Sized {
     fn get_offset(&self, idx: PointOffsetType) -> MultivectorOffset;
 
     fn len(&self) -> usize;
-
-    fn flusher(&self) -> MmapFlusher;
 
     fn push_offset(
         &mut self,
@@ -68,10 +64,6 @@ impl MultivectorOffsetsStorage for Vec<MultivectorOffset> {
         self.len()
     }
 
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
-    }
-
     fn push_offset(
         &mut self,
         offset: MultivectorOffset,
@@ -81,48 +73,6 @@ impl MultivectorOffsetsStorage for Vec<MultivectorOffset> {
             .vector_io_write_counter()
             .incr_delta(std::mem::size_of_val(&offset));
         self.push(offset);
-        Ok(())
-    }
-}
-
-impl MultivectorOffsetsStorage for ChunkedMmapVectors<MultivectorOffset> {
-    fn load(_path: &Path) -> OperationResult<Self> {
-        unreachable!("");
-    }
-
-    fn save(&self, _path: &Path) -> OperationResult<()> {
-        unreachable!("");
-    }
-
-    fn get_offset(&self, idx: PointOffsetType) -> MultivectorOffset {
-        ChunkedVectorStorage::get_many(self, idx as usize, 1)
-            .expect("Failed to get multivector offset from chunked storage")[0]
-    }
-
-    fn len(&self) -> usize {
-        ChunkedVectorStorage::len(self)
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        let flusher = ChunkedMmapVectors::flusher(self);
-        Box::new(move || {
-            flusher().map_err(|e| {
-                std::io::Error::other(format!("Failed to flush multivector offsets storage: {e}"))
-            })?;
-            Ok(())
-        })
-    }
-
-    fn push_offset(
-        &mut self,
-        offset: MultivectorOffset,
-        hw_counter: &HardwareCounterCell,
-    ) -> std::io::Result<()> {
-        ChunkedMmapVectors::push(self, &[offset], hw_counter).map_err(|e| {
-            std::io::Error::other(format!(
-                "Failed to push offset to multivector offsets storage: {e}"
-            ))
-        })?;
         Ok(())
     }
 }
@@ -162,10 +112,6 @@ impl MultivectorOffsetsStorage for MultivectorOffsetsStorageMmap {
 
     fn len(&self) -> usize {
         self.offsets.len()
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        Box::new(|| Ok(()))
     }
 
     fn push_offset(
@@ -419,16 +365,6 @@ where
 
     fn vectors_count(&self) -> usize {
         self.offsets.len()
-    }
-
-    fn flusher(&self) -> MmapFlusher {
-        let quantized_storage_flusher = self.quantized_storage.flusher();
-        let offsets_flusher = self.offsets.flusher();
-        Box::new(move || {
-            quantized_storage_flusher()?;
-            offsets_flusher()?;
-            Ok(())
-        })
     }
 }
 
