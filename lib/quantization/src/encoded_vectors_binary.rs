@@ -770,10 +770,6 @@ impl<TBitsStoreType: BitsStoreType, TStorage: EncodedStorage>
         &self.metadata.vector_parameters
     }
 
-    pub fn vectors_count(&self) -> usize {
-        todo!()
-    }
-
     pub fn encode_internal_query(&self, point_id: u32) -> EncodedQueryBQ<TBitsStoreType> {
         // For internal queries we use the same encoding as for storage
         EncodedQueryBQ::Binary(EncodedBinVector {

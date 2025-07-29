@@ -67,11 +67,9 @@ impl MultivectorOffsetsStorage for Vec<MultivectorOffset> {
     fn push_offset(
         &mut self,
         offset: MultivectorOffset,
-        hw_counter: &HardwareCounterCell,
+        _hw_counter: &HardwareCounterCell,
     ) -> std::io::Result<()> {
-        hw_counter
-            .vector_io_write_counter()
-            .incr_delta(std::mem::size_of_val(&offset));
+        // Skip hardware counter increment because it's a RAM storage.
         self.push(offset);
         Ok(())
     }
@@ -176,6 +174,14 @@ where
         multi_vector_config: &MultiVectorConfig,
     ) -> OperationResult<Self> {
         let offsets = TMultivectorOffsetsStorage::load(offsets_path)?;
+
+        // Dirty way to get inner vectors count from offsets.
+        // We expect that offsets have increasing order because they are written/pushed in order of vectors.
+        // And get the last offset to determine the inner vectors count.
+        //
+        // This is needed to load quantized storage with correct vectors count.
+        // There is no another way to get inner vectors count.
+        // We cannot rely on `MultiVectorStorage` here because dense inner vectors count may differs from quantized inner vectors count.
         let inner_vectors_count = if offsets.len() > 0 {
             let offset = offsets.get_offset(offsets.len() as PointOffsetType - 1);
             offset.start as usize + offset.count as usize
@@ -349,14 +355,14 @@ where
             flattened_vectors: vector,
         };
 
-        let old_vectors_count = self.quantized_storage.vectors_count();
+        let old_inner_vectors_count = self.quantized_storage.vectors_count();
         for inner_vector in multi_vector.multi_vectors() {
             self.quantized_storage
                 .push_vector(inner_vector, hw_counter)?;
         }
 
         let offset: MultivectorOffset = MultivectorOffset {
-            start: old_vectors_count as PointOffsetType,
+            start: old_inner_vectors_count as PointOffsetType,
             count: multi_vector.vectors_count() as PointOffsetType,
         };
         self.offsets.push_offset(offset, hw_counter)?;

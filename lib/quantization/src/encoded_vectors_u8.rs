@@ -287,10 +287,6 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     pub fn get_actual_dim(vector_parameters: &VectorParameters) -> usize {
         vector_parameters.dim + (ALIGNMENT - vector_parameters.dim % ALIGNMENT) % ALIGNMENT
     }
-
-    pub fn vectors_count(&self) -> usize {
-        todo!()
-    }
 }
 
 impl<TStorage: EncodedStorage> EncodedVectors for EncodedVectorsU8<TStorage> {

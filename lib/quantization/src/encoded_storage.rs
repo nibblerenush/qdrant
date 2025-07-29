@@ -8,12 +8,6 @@ use memory::fadvise::OneshotFile;
 pub trait EncodedStorage {
     fn get_vector_data(&self, index: usize, vector_size: usize) -> &[u8];
 
-    fn push_vector(
-        &mut self,
-        vector: &[u8],
-        hw_counter: &HardwareCounterCell,
-    ) -> std::io::Result<()>;
-
     fn from_file(
         path: &Path,
         quantized_vector_size: usize,
@@ -25,6 +19,12 @@ pub trait EncodedStorage {
     fn save_to_file(&self, path: &Path) -> std::io::Result<()>;
 
     fn is_on_disk(&self) -> bool;
+
+    fn push_vector(
+        &mut self,
+        vector: &[u8],
+        hw_counter: &HardwareCounterCell,
+    ) -> std::io::Result<()>;
 
     fn vectors_count(&self, quantized_vector_size: usize) -> usize;
 }
@@ -45,13 +45,11 @@ impl EncodedStorage for Vec<u8> {
     fn push_vector(
         &mut self,
         vector: &[u8],
-        hw_counter: &HardwareCounterCell,
+        _hw_counter: &HardwareCounterCell,
     ) -> std::io::Result<()> {
+        // Skip hardware counter increment because it's a RAM storage.
         self.try_reserve(vector.len())?;
         self.extend_from_slice(vector);
-        hw_counter
-            .vector_io_write_counter()
-            .incr_delta(std::mem::size_of_val(vector));
         Ok(())
     }
 

@@ -447,10 +447,6 @@ impl<TStorage: EncodedStorage> EncodedVectorsPQ<TStorage> {
     pub fn get_metadata(&self) -> &Metadata {
         &self.metadata
     }
-
-    pub fn vectors_count(&self) -> usize {
-        todo!()
-    }
 }
 
 impl<TStorage: EncodedStorage> EncodedVectors for EncodedVectorsPQ<TStorage> {
@@ -598,6 +594,7 @@ impl<TStorage: EncodedStorage> EncodedVectors for EncodedVectorsPQ<TStorage> {
     }
 
     fn vectors_count(&self) -> usize {
+        // `vector_division` size is equal to quantized vector size because each chunk is replaced by one `u8` centroid index.
         self.encoded_vectors
             .vectors_count(self.metadata.vector_division.len())
     }

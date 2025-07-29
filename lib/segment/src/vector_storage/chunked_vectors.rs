@@ -180,15 +180,11 @@ impl quantization::EncodedStorage for ChunkedVectors<u8> {
     fn push_vector(
         &mut self,
         vector: &[u8],
-        hw_counter: &HardwareCounterCell,
+        _hw_counter: &HardwareCounterCell,
     ) -> std::io::Result<()> {
-        // Memory for ChunkedVectors are already pre-allocated,
-        // so we do not expect any errors here.
+        // Skip hardware counter increment because it's a RAM storage.
         self.push(vector)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::OutOfMemory, err.to_string()))?;
-        hw_counter
-            .vector_io_write_counter()
-            .incr_delta(size_of_val(vector));
         Ok(())
     }
 
