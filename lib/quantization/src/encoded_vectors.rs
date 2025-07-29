@@ -94,8 +94,7 @@ pub(crate) fn validate_vector_parameters<'a>(
     if let Some(vectors_count) = vector_parameters.count {
         if count != vectors_count {
             return Err(EncodingError::ArgumentsError(format!(
-                "Vector count {} does not match vector parameters count {}",
-                count, vectors_count
+                "Vector count {count} does not match vector parameters count {vectors_count}"
             )));
         }
     }
