@@ -28,7 +28,7 @@ mod tests {
             Vec::<u8>::new(),
             &VectorParameters {
                 dim: vector_dim,
-                count: None,
+                count: vectors_count,
                 distance_type: DistanceType::Dot,
                 invert: false,
             },
@@ -65,7 +65,7 @@ mod tests {
             Vec::<u8>::new(),
             &VectorParameters {
                 dim: vector_dim,
-                count: None,
+                count: vectors_count,
                 distance_type: DistanceType::L2,
                 invert: false,
             },
@@ -102,7 +102,7 @@ mod tests {
             Vec::<u8>::new(),
             &VectorParameters {
                 dim: vector_dim,
-                count: None,
+                count: vectors_count,
                 distance_type: DistanceType::L1,
                 invert: false,
             },

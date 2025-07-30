@@ -18,8 +18,7 @@ pub struct VectorParameters {
 
     // Deprecated since `v1.15.2`, use `EncodedVectors::vectors_count` from quantization instead.
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub count: Option<usize>,
+    pub count: usize,
     pub distance_type: DistanceType,
     pub invert: bool,
 }
@@ -91,12 +90,11 @@ pub(crate) fn validate_vector_parameters<'a>(
         }
         count += 1;
     }
-    if let Some(vectors_count) = vector_parameters.count {
-        if count != vectors_count {
-            return Err(EncodingError::ArgumentsError(format!(
-                "Vector count {count} does not match vector parameters count {vectors_count}"
-            )));
-        }
+    if count != vector_parameters.count {
+        return Err(EncodingError::ArgumentsError(format!(
+            "Vector count {count} does not match vector parameters count {}",
+            vector_parameters.count
+        )));
     }
     Ok(())
 }
