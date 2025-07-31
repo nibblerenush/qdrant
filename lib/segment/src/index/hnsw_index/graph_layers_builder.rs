@@ -610,12 +610,13 @@ mod tests {
     const M: usize = 8;
 
     #[cfg(not(windows))]
-    fn parallel_graph_build<TMetric: Metric<VectorElementType> + Sync + Send, R>(
+    fn parallel_graph_build<R>(
         num_vectors: usize,
         dim: usize,
         use_heuristic: bool,
+        distance: Distance,
         rng: &mut R,
-    ) -> (TestRawScorerProducer<TMetric>, GraphLayersBuilder)
+    ) -> (TestRawScorerProducer, GraphLayersBuilder)
     where
         R: Rng + ?Sized,
     {
@@ -629,8 +630,7 @@ mod tests {
         let ef_construct = 16;
         let entry_points_num = 10;
 
-        let vector_holder =
-            TestRawScorerProducer::<TMetric>::new(dim, num_vectors, TMetric::distance(), rng);
+        let vector_holder = TestRawScorerProducer::new(dim, num_vectors, distance, rng);
 
         let mut graph_layers = GraphLayersBuilder::new(
             num_vectors,
@@ -657,12 +657,13 @@ mod tests {
         (vector_holder, graph_layers)
     }
 
-    fn create_graph_layer<TMetric: Metric<VectorElementType>, R>(
+    fn create_graph_layer<R>(
         num_vectors: usize,
         dim: usize,
         use_heuristic: bool,
+        distance: Distance,
         rng: &mut R,
-    ) -> (TestRawScorerProducer<TMetric>, GraphLayersBuilder)
+    ) -> (TestRawScorerProducer, GraphLayersBuilder)
     where
         R: Rng + ?Sized,
     {
@@ -670,8 +671,7 @@ mod tests {
         let ef_construct = 16;
         let entry_points_num = 10;
 
-        let vector_holder =
-            TestRawScorerProducer::<TMetric>::new(dim, num_vectors, TMetric::distance(), rng);
+        let vector_holder = TestRawScorerProducer::new(dim, num_vectors, distance, rng);
 
         let mut graph_layers = GraphLayersBuilder::new(
             num_vectors,
@@ -702,17 +702,17 @@ mod tests {
     fn test_parallel_graph_build(#[case] format: GraphLinksFormat) {
         use crate::vector_storage::VectorStorage as _;
 
+        let distance = Distance::Cosine;
         let num_vectors = 1000;
         let dim = 8;
 
         let mut rng = StdRng::seed_from_u64(42);
-        type M = CosineMetric;
 
         // let (vector_holder, graph_layers_builder) =
         //     create_graph_layer::<M, _>(num_vectors, dim, false, &mut rng);
 
         let (vector_holder, graph_layers_builder) =
-            parallel_graph_build::<M, _>(num_vectors, dim, false, &mut rng);
+            parallel_graph_build(num_vectors, dim, false, distance, &mut rng);
 
         let main_entry = graph_layers_builder
             .entry_points
@@ -745,13 +745,13 @@ mod tests {
 
         let top = 5;
         let query = random_vector(&mut rng, dim);
-        let processed_query = <M as Metric<VectorElementType>>::preprocess(query.clone());
+        let processed_query = distance.preprocess_vector::<VectorElementType>(query.clone());
         let mut reference_top = FixedLengthPriorityQueue::new(top);
         for idx in 0..vector_holder.total_vector_count() as PointOffsetType {
             let vec = &vector_holder.get_vector(idx);
             reference_top.push(ScoredPointOffset {
                 idx,
-                score: M::similarity(vec, &processed_query),
+                score: CosineMetric::similarity(vec, &processed_query),
             });
         }
 
@@ -772,19 +772,18 @@ mod tests {
     fn test_add_points(#[case] format: GraphLinksFormat) {
         use crate::vector_storage::VectorStorage as _;
 
+        let distance = Distance::Cosine;
         let num_vectors = 1000;
         let dim = 8;
 
         let mut rng = StdRng::seed_from_u64(42);
         let mut rng2 = StdRng::seed_from_u64(42);
 
-        type M = CosineMetric;
-
         let (vector_holder, graph_layers_builder) =
-            create_graph_layer::<M, _>(num_vectors, dim, false, &mut rng);
+            create_graph_layer(num_vectors, dim, false, distance, &mut rng);
 
         let (_vector_holder_orig, graph_layers_orig) =
-            create_graph_layer_fixture::<M, _>(num_vectors, M, dim, format, false, &mut rng2);
+            create_graph_layer_fixture(num_vectors, M, dim, format, false, distance, &mut rng2);
 
         // check is graph_layers_builder links are equal to graph_layers_orig
         let orig_len = graph_layers_orig.links.num_points();
@@ -840,13 +839,13 @@ mod tests {
 
         let top = 5;
         let query = random_vector(&mut rng, dim);
-        let processed_query = <M as Metric<VectorElementType>>::preprocess(query.clone());
+        let processed_query = distance.preprocess_vector::<VectorElementType>(query.clone());
         let mut reference_top = FixedLengthPriorityQueue::new(top);
         for idx in 0..vector_holder.total_vector_count() as PointOffsetType {
             let vec = &vector_holder.get_vector(idx);
             reference_top.push(ScoredPointOffset {
                 idx,
-                score: M::similarity(vec, &processed_query),
+                score: CosineMetric::similarity(vec, &processed_query),
             });
         }
 
@@ -872,12 +871,8 @@ mod tests {
 
         let mut rng = StdRng::seed_from_u64(42);
 
-        let vector_holder = TestRawScorerProducer::<CosineMetric>::new(
-            DIM,
-            NUM_VECTORS,
-            Distance::Cosine,
-            &mut rng,
-        );
+        let vector_holder =
+            TestRawScorerProducer::new(DIM, NUM_VECTORS, Distance::Cosine, &mut rng);
         let mut graph_layers_builder =
             GraphLayersBuilder::new(NUM_VECTORS, HnswM::new2(M), EF_CONSTRUCT, 10, USE_HEURISTIC);
         for idx in 0..(NUM_VECTORS as PointOffsetType) {
