@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -15,105 +16,87 @@ use crate::data_types::vectors::{DenseVector, VectorElementType, VectorRef};
 use crate::index::hnsw_index::point_scorer::FilteredScorer;
 use crate::spaces::metric::Metric;
 use crate::types::{Distance, VectorStorageDatatype};
-use crate::vector_storage::chunked_vectors::ChunkedVectors;
-use crate::vector_storage::{DenseVectorStorage, VectorStorage, raw_scorer_impl};
+use crate::vector_storage::dense::volatile_dense_vector_storage::new_volatile_dense_vector_storage;
+use crate::vector_storage::{VectorStorage, VectorStorageEnum};
 
 pub fn random_vector<R: Rng + ?Sized>(rnd_gen: &mut R, size: usize) -> DenseVector {
     (0..size).map(|_| rnd_gen.random_range(-1.0..1.0)).collect()
 }
 
 pub struct TestRawScorerProducer<TMetric: Metric<VectorElementType>> {
-    pub vectors: ChunkedVectors<VectorElementType>,
+    pub vector_storage: VectorStorageEnum,
     pub deleted_points: BitVec,
-    pub deleted_vectors: BitVec,
     pub metric: PhantomData<TMetric>,
-}
-
-impl<TMetric: Metric<VectorElementType>> DenseVectorStorage<VectorElementType>
-    for TestRawScorerProducer<TMetric>
-{
-    fn vector_dim(&self) -> usize {
-        self.vectors.get(0).len()
-    }
-
-    fn get_dense(&self, key: PointOffsetType) -> &[VectorElementType] {
-        self.vectors.get(key as _)
-    }
-
-    fn get_dense_sequential(&self, key: PointOffsetType) -> &[VectorElementType] {
-        self.vectors.get(key as _)
-    }
 }
 
 impl<TMetric: Metric<VectorElementType>> VectorStorage for TestRawScorerProducer<TMetric> {
     fn distance(&self) -> Distance {
-        TMetric::distance()
+        self.vector_storage.distance()
     }
 
     fn datatype(&self) -> VectorStorageDatatype {
-        VectorStorageDatatype::Float32
+        self.vector_storage.datatype()
     }
 
     fn is_on_disk(&self) -> bool {
-        false
+        self.vector_storage.is_on_disk()
     }
 
     fn total_vector_count(&self) -> usize {
-        self.vectors.len()
+        self.vector_storage.total_vector_count()
     }
 
     fn get_vector(&self, key: PointOffsetType) -> CowVector {
-        self.get_vector_opt(key).expect("vector not found")
+        self.vector_storage.get_vector(key)
     }
 
     fn get_vector_sequential(&self, key: PointOffsetType) -> CowVector {
-        self.get_vector(key)
+        self.vector_storage.get_vector_sequential(key)
     }
 
     fn get_vector_opt(&self, key: PointOffsetType) -> Option<CowVector> {
-        self.vectors.get_opt(key as _).map(|v| v.into())
+        self.vector_storage.get_vector_opt(key)
     }
 
     fn insert_vector(
         &mut self,
         key: PointOffsetType,
         vector: VectorRef,
-        _hw_counter: &HardwareCounterCell,
+        hw_counter: &HardwareCounterCell,
     ) -> OperationResult<()> {
-        self.vectors.insert(key as _, vector.try_into()?)?;
-        Ok(())
+        self.vector_storage.insert_vector(key, vector, hw_counter)
     }
 
     fn update_from<'a>(
         &mut self,
-        _other_vectors: &'a mut impl Iterator<Item = (CowVector<'a>, bool)>,
-        _stopped: &AtomicBool,
+        other_vectors: &'a mut impl Iterator<Item = (CowVector<'a>, bool)>,
+        stopped: &AtomicBool,
     ) -> OperationResult<Range<PointOffsetType>> {
-        todo!()
+        self.vector_storage.update_from(other_vectors, stopped)
     }
 
     fn flusher(&self) -> Flusher {
-        Box::new(|| Ok(()))
+        self.vector_storage.flusher()
     }
 
     fn files(&self) -> Vec<PathBuf> {
-        vec![]
+        self.vector_storage.files()
     }
 
     fn delete_vector(&mut self, key: PointOffsetType) -> OperationResult<bool> {
-        Ok(!self.deleted_vectors.replace(key as usize, true))
+        self.vector_storage.delete_vector(key)
     }
 
     fn is_deleted_vector(&self, key: PointOffsetType) -> bool {
-        self.deleted_vectors[key as usize]
+        self.vector_storage.is_deleted_vector(key)
     }
 
     fn deleted_vector_count(&self) -> usize {
-        self.deleted_vectors.count_ones()
+        self.vector_storage.deleted_vector_count()
     }
 
     fn deleted_vector_bitslice(&self) -> &BitSlice {
-        &self.deleted_vectors
+        self.vector_storage.deleted_vector_bitslice()
     }
 }
 
@@ -125,27 +108,36 @@ where
     where
         R: Rng + ?Sized,
     {
-        let mut vectors = ChunkedVectors::new(dim);
-        for _ in 0..num_vectors {
+        let mut vector_storage = new_volatile_dense_vector_storage(dim, TMetric::distance());
+        let hw_counter = HardwareCounterCell::new();
+        for offset in 0..num_vectors {
             let rnd_vec = random_vector(rng, dim);
             let rnd_vec = TMetric::preprocess(rnd_vec);
-            vectors.push(&rnd_vec).unwrap();
+            vector_storage
+                .insert_vector(
+                    offset as PointOffsetType,
+                    VectorRef::from(&rnd_vec),
+                    &hw_counter,
+                )
+                .unwrap();
         }
-        TestRawScorerProducer::<TMetric> {
-            vectors,
+
+        TestRawScorerProducer {
+            vector_storage,
             deleted_points: BitVec::repeat(false, num_vectors),
-            deleted_vectors: BitVec::repeat(false, num_vectors),
             metric: PhantomData,
+        }
+    }
+
+    pub fn get_vector(&self, key: PointOffsetType) -> Cow<[VectorElementType]> {
+        match self.vector_storage.get_vector(key) {
+            CowVector::Dense(cow) => cow,
+            _ => unreachable!("Expected vector storage to be dense"),
         }
     }
 
     pub fn get_scorer(&self, query: DenseVector) -> FilteredScorer<'_> {
         let query = TMetric::preprocess(query).into();
-        let raw_scorer = raw_scorer_impl(query, self, HardwareCounterCell::new()).unwrap();
-        FilteredScorer::new_from_raw(
-            raw_scorer,
-            self.deleted_vector_bitslice(),
-            &self.deleted_points,
-        )
+        FilteredScorer::new_for_test(query, &self.vector_storage, &self.deleted_points)
     }
 }
