@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use collection::collection::Collection;
@@ -11,12 +13,12 @@ use collection::shards::replica_set::ReplicaState;
 use collection::shards::replica_set::snapshots::RecoveryType;
 use collection::shards::shard::ShardId;
 use segment::data_types::segment_manifest::SegmentManifests;
-use storage::content_manager::errors::StorageError;
+use storage::content_manager::errors::{StorageError, StorageResult};
 use storage::content_manager::snapshots;
 use storage::content_manager::toc::TableOfContent;
 use storage::dispatcher::Dispatcher;
 use storage::rbac::{Access, AccessRequirements};
-use tokio::sync::OwnedRwLockWriteGuard;
+use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard};
 
 use super::http_client::HttpClient;
 
@@ -236,28 +238,21 @@ pub async fn recover_shard_snapshot(
     Ok(())
 }
 
-/// # Cancel safety
-///
-/// This function is *not* cancel safe.
-pub async fn recover_shard_snapshot_impl(
-    toc: &TableOfContent,
-    collection: &Collection,
-    shard: ShardId,
-    snapshot_path: &std::path::Path,
-    priority: SnapshotPriority,
+pub async fn recover_shard_snapshot_wip(
+    toc: Arc<TableOfContent>,
+    collection: OwnedRwLockReadGuard<HashMap<String, Collection>, Collection>,
+    shard_id: ShardId,
+    snapshot_path: PathBuf,
     recovery_type: RecoveryType,
-    cancel: cancel::CancellationToken,
-) -> Result<(), StorageError> {
-    // `Collection::restore_shard_snapshot` and `activate_shard` calls *have to* be executed as a
-    // single transaction
-    //
-    // It is *possible* to make this function to be cancel safe, but it is *extremely tedious* to do so
+    snapshot_priority: SnapshotPriority,
+) -> StorageResult<impl Future<Output = StorageResult<()>> + 'static> {
+    let cancel = cancel::CancellationToken::new();
+    let guard = cancel.clone().drop_guard();
 
-    // TODO!
-    collection
+    let restore = collection
         .restore_shard_snapshot(
-            shard,
-            snapshot_path,
+            shard_id,
+            &snapshot_path,
             recovery_type,
             toc.this_peer_id,
             toc.is_distributed(),
@@ -266,8 +261,67 @@ pub async fn recover_shard_snapshot_impl(
         )
         .await?;
 
+    // TODO: Not 100% cancel-safe, but should be good-enough...
+    let restore_and_notify = tokio::spawn(async move {
+        restore.await?;
+        notify_recovered_replicas(
+            &toc,
+            &collection,
+            shard_id,
+            recovery_type,
+            snapshot_priority,
+        )
+        .await?;
+        Ok(())
+    });
+
+    let restore_and_notify_cancel_on_drop = async move {
+        let _guard = guard;
+        restore_and_notify.await?
+    };
+
+    Ok(restore_and_notify_cancel_on_drop)
+}
+
+/// # Cancel safety
+///
+/// This function is *not* cancel safe.
+pub async fn recover_shard_snapshot_impl(
+    toc: &TableOfContent,
+    collection: &Collection,
+    shard_id: ShardId,
+    snapshot_path: &Path,
+    snapshot_priority: SnapshotPriority,
+    recovery_type: RecoveryType,
+    cancel: cancel::CancellationToken,
+) -> StorageResult<()> {
+    collection
+        .restore_shard_snapshot(
+            shard_id,
+            snapshot_path,
+            recovery_type,
+            toc.this_peer_id,
+            toc.is_distributed(),
+            &toc.optional_temp_or_snapshot_temp_path()?,
+            cancel,
+        )
+        .await?
+        .await?;
+
+    notify_recovered_replicas(toc, collection, shard_id, recovery_type, snapshot_priority).await?;
+
+    Ok(())
+}
+
+pub async fn notify_recovered_replicas(
+    toc: &TableOfContent,
+    collection: &Collection,
+    shard_id: ShardId,
+    recovery_type: RecoveryType,
+    snapshot_priority: SnapshotPriority,
+) -> StorageResult<()> {
     let state = collection.state().await;
-    let shard_info = state.shards.get(&shard).unwrap(); // TODO: Handle `unwrap`?..
+    let shard_info = state.shards.get(&shard_id).unwrap(); // TODO: Handle `unwrap`?..
 
     // TODO: Unify (and de-duplicate) "recovered shard state notification" logic in `_do_recover_from_snapshot` with this one!
 
@@ -289,23 +343,23 @@ pub async fn recover_shard_snapshot_impl(
         .collect();
 
     if other_active_replicas.is_empty() || recovery_type.is_partial() {
-        snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard).await?;
+        snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard_id).await?;
     } else {
-        match priority {
+        match snapshot_priority {
             SnapshotPriority::NoSync => {
-                snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard)
+                snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard_id)
                     .await?;
             }
 
             SnapshotPriority::Snapshot => {
-                snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard)
+                snapshots::recover::activate_shard(toc, collection, toc.this_peer_id, &shard_id)
                     .await?;
 
                 for &(peer, _) in other_active_replicas.iter() {
                     toc.send_set_replica_state_proposal(
                         collection.name(),
                         peer,
-                        shard,
+                        shard_id,
                         ReplicaState::Dead,
                         None,
                     )?;
@@ -316,7 +370,7 @@ pub async fn recover_shard_snapshot_impl(
                 toc.send_set_replica_state_proposal(
                     collection.name(),
                     toc.this_peer_id,
-                    shard,
+                    shard_id,
                     ReplicaState::Dead,
                     None,
                 )?;
