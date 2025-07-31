@@ -521,6 +521,7 @@ mod tests {
         let vector_holder = TestRawScorerProducer::<DotProductMetric>::new(
             dim,
             num_vectors + groups_count,
+            Distance::Dot,
             &mut rng,
         );
 

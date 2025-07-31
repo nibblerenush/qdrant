@@ -27,6 +27,7 @@ pub struct TestRawScorerProducer<TMetric: Metric<VectorElementType>> {
     pub vector_storage: VectorStorageEnum,
     pub deleted_points: BitVec,
     pub metric: PhantomData<TMetric>,
+    pub distance: Distance,
 }
 
 impl<TMetric: Metric<VectorElementType>> VectorStorage for TestRawScorerProducer<TMetric> {
@@ -104,11 +105,11 @@ impl<TMetric> TestRawScorerProducer<TMetric>
 where
     TMetric: Metric<VectorElementType>,
 {
-    pub fn new<R>(dim: usize, num_vectors: usize, rng: &mut R) -> Self
+    pub fn new<R>(dim: usize, num_vectors: usize, distance: Distance, rng: &mut R) -> Self
     where
         R: Rng + ?Sized,
     {
-        let mut vector_storage = new_volatile_dense_vector_storage(dim, TMetric::distance());
+        let mut vector_storage = new_volatile_dense_vector_storage(dim, distance);
         let hw_counter = HardwareCounterCell::new();
         for offset in 0..num_vectors {
             let rnd_vec = random_vector(rng, dim);
@@ -126,6 +127,7 @@ where
             vector_storage,
             deleted_points: BitVec::repeat(false, num_vectors),
             metric: PhantomData,
+            distance,
         }
     }
 
