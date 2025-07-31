@@ -299,7 +299,7 @@ impl Collection {
 
     /// # Cancel safety
     ///
-    /// This method is *not* cancel safe.
+    /// This method is cancel safe.
     #[expect(clippy::too_many_arguments)]
     pub async fn restore_shard_snapshot(
         &self,
@@ -310,7 +310,7 @@ impl Collection {
         is_distributed: bool,
         temp_dir: &Path,
         cancel: cancel::CancellationToken,
-    ) -> CollectionResult<impl Future<Output = CollectionResult<()>>> {
+    ) -> CollectionResult<impl Future<Output = CollectionResult<()>> + 'static> {
         let shard_holder = self.shards_holder.clone().read_owned().await;
 
         shard_holder.validate_shard_snapshot(&snapshot_path).await?;
