@@ -85,7 +85,7 @@ impl Persistent {
             dirty: _,
         } = self;
 
-        state.conf_state = meta.get_conf_state().clone();
+        state.conf_state = meta.conf_state().clone();
         state.hard_state.term = cmp::max(state.hard_state.term, meta.term);
         state.hard_state.commit = meta.index;
 
@@ -454,6 +454,8 @@ struct HardStateDef {
     term: u64,
     vote: u64,
     commit: u64,
+    #[serde(skip)]
+    special_fields: protobuf::SpecialFields,
 }
 
 /// Definition of struct to help with serde serialization.
@@ -466,4 +468,6 @@ struct ConfStateDef {
     voters_outgoing: Vec<u64>,
     learners_next: Vec<u64>,
     auto_leave: bool,
+    #[serde(skip)]
+    special_fields: protobuf::SpecialFields,
 }

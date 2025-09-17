@@ -3,7 +3,6 @@ use api::grpc::qdrant::{
     AddPeerToKnownMessage, AllPeers, Peer, PeerId, RaftMessage as RaftMessageBytes, Uri as UriStr,
 };
 use itertools::Itertools;
-use raft::eraftpb::Message as RaftMessage;
 use storage::content_manager::consensus_manager::ConsensusStateRef;
 use storage::content_manager::consensus_ops::ConsensusOperations;
 use tokio::sync::mpsc::Sender;
@@ -37,10 +36,9 @@ impl RaftService {
 impl Raft for RaftService {
     async fn send(&self, mut request: Request<RaftMessageBytes>) -> Result<Response<()>, Status> {
         let message =
-            <RaftMessage as prost_for_raft::Message>::decode(&request.get_mut().message[..])
-                .map_err(|err| {
-                    Status::invalid_argument(format!("Failed to parse raft message: {err}"))
-                })?;
+            protobuf::Message::parse_from_bytes(&request.get_mut().message[..]).map_err(|err| {
+                Status::invalid_argument(format!("Failed to parse raft message: {err}"))
+            })?;
         self.message_sender
             .send(consensus::Message::FromPeer(Box::new(message)))
             .await

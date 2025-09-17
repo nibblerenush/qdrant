@@ -62,7 +62,7 @@ pub mod consensus_ops {
         type Error = serde_cbor::Error;
 
         fn try_from(entry: &RaftEntry) -> Result<Self, Self::Error> {
-            serde_cbor::from_slice(entry.get_data())
+            serde_cbor::from_slice(entry.data())
         }
     }
 

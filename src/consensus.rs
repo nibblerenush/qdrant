@@ -679,7 +679,7 @@ impl Consensus {
 
             Message::FromPeer(message) => {
                 let is_heartbeat = matches!(
-                    message.get_msg_type(),
+                    message.msg_type(),
                     MessageType::MsgHeartbeat | MessageType::MsgHeartbeatResponse,
                 );
 
@@ -907,7 +907,7 @@ impl Consensus {
         if !ready.snapshot().is_empty() {
             // This is a snapshot, we need to apply the snapshot at first.
             let snapshot = ready.snapshot().clone();
-            log::debug!("Applying snapshot {:?}", snapshot.get_metadata());
+            log::debug!("Applying snapshot {:?}", snapshot.metadata());
             is_idle = false;
 
             if let Err(err) = store.apply_snapshot(&snapshot)? {
@@ -1308,7 +1308,7 @@ impl RaftMessageSender {
         let peer_id = message.to;
 
         let uri = self.uri(peer_id).await?;
-        let bytes = <RaftMessage as prost_for_raft::Message>::encode_to_vec(message);
+        let bytes = protobuf::Message::write_to_bytes(message)?;
         let grpc_message = GrpcRaftMessage { message: bytes };
 
         let timeout = Duration::from_millis(
@@ -1330,7 +1330,7 @@ impl RaftMessageSender {
             )
             .await;
 
-        if message.msg_type == raft::eraftpb::MessageType::MsgSnapshot as i32 {
+        if message.msg_type() == raft::eraftpb::MessageType::MsgSnapshot {
             let res = self.consensus_state.report_snapshot(
                 peer_id,
                 if res.is_ok() {
@@ -1406,8 +1406,8 @@ impl RaftMessageSender {
 }
 
 fn is_heartbeat(message: &RaftMessage) -> bool {
-    message.msg_type == raft::eraftpb::MessageType::MsgHeartbeat as i32
-        || message.msg_type == raft::eraftpb::MessageType::MsgHeartbeatResponse as i32
+    message.msg_type() == raft::eraftpb::MessageType::MsgHeartbeat
+        || message.msg_type() == raft::eraftpb::MessageType::MsgHeartbeatResponse
 }
 
 #[cfg(test)]

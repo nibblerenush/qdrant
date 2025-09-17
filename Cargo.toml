@@ -100,16 +100,14 @@ murmur3 = { git = "https://github.com/stusmall/murmur3", rev = "2c39087" }
 tempfile = { workspace = true }
 
 # Consensus related crates
+protobuf = { workspace = true }
 raft = { workspace = true }
 slog = { version = "2.7.0", features = [
     "max_level_trace",
     "release_max_level_debug",
 ] }
 slog-stdlog = "4.1.1"
-prost-for-raft = { workspace = true }
-raft-proto = { version = "0.7.0", features = [
-    "prost-codec",
-], default-features = false }
+raft-proto = { git = "https://github.com/nibblerenush/raft-rs.git", branch = "upgrade_protobuf_to_3", default-features = false, package = "raft-proto" }
 
 common = { path = "lib/common/common" }
 cancel = { path = "lib/common/cancel" }
@@ -235,8 +233,8 @@ proptest = { version = "1.7.0", default-features = false, features = ["std"] }
 prost = "0.12.6"
 prost-build = { version = "0.12.6", features = ["cleanup-markdown"] }
 prost-wkt-types = "0.5"
-prost-for-raft = { package = "prost", version = "=0.11.9" } # version of prost used by raft
-raft = { version = "0.7.0", features = ["prost-codec"], default-features = false }
+protobuf = { version = "3", features = ["with-bytes"] } # version of protobuf used by raft
+raft = { git = "https://github.com/nibblerenush/raft-rs.git", branch = "upgrade_protobuf_to_3", default-features = false }
 rand = "0.9.2"
 reqwest = { version = "0.12.23", default-features = false, features = [
     "json",

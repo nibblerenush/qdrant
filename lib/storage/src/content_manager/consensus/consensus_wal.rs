@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::{cmp, fs};
 
-use prost_for_raft::Message;
 use protobuf::Message as _;
 use raft::eraftpb::Entry as RaftEntry;
 use wal::Wal;
@@ -108,7 +107,7 @@ impl ConsensusOpWal {
             let entry = self.entry_by_wal_index(wal_index)?;
 
             if let Some(max_size_bytes) = max_size_bytes {
-                size_bytes = size_bytes.saturating_add(entry.compute_size().into());
+                size_bytes = size_bytes.saturating_add(entry.compute_size());
 
                 if size_bytes >= max_size_bytes && !entries.is_empty() {
                     break;
@@ -225,7 +224,7 @@ impl ConsensusOpWal {
             }
 
             buf.clear();
-            new_entry.encode(&mut buf)?;
+            new_entry.write_to_vec(&mut buf)?;
 
             #[cfg_attr(not(debug_assertions), expect(unused_variables))]
             let new_entry_wal_index = self.wal.append(&buf)?;
@@ -328,7 +327,7 @@ impl ConsensusOpWal {
         let entry: Option<RaftEntry> = self
             .wal
             .entry(wal_index)
-            .map(|entry| prost_for_raft::Message::decode(entry.as_ref()))
+            .map(|entry| protobuf::Message::parse_from_bytes(entry.as_ref()))
             .transpose()?;
 
         if let Some(entry) = &entry {
@@ -407,47 +406,52 @@ mod tests {
         init_logger();
         let entries_orig = vec![
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 1,
-                data: vec![1, 2, 3],
-                context: vec![],
+                data: vec![1, 2, 3].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 2,
-                data: vec![1, 2, 3],
-                context: vec![],
+                data: vec![1, 2, 3].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 3,
-                data: vec![1, 2, 3],
-                context: vec![],
+                data: vec![1, 2, 3].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
         ];
 
         let entries_new = vec![
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 2,
-                data: vec![2, 2, 2],
-                context: vec![],
+                data: vec![2, 2, 2].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 3,
-                data: vec![3, 3, 3],
-                context: vec![],
+                data: vec![3, 3, 3].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
         ];
 
@@ -469,12 +473,13 @@ mod tests {
         assert_eq!(wal.index_offset().unwrap().wal_to_raft_offset, 2);
 
         let broken_entry = vec![Entry {
-            entry_type: 0,
+            entry_type: protobuf::EnumOrUnknown::from_i32(0),
             term: 1,
             index: 1, // Index 1 can't be overwritten, because it is already compacted
-            data: vec![5, 5, 5],
-            context: vec![],
+            data: vec![5, 5, 5].into(),
+            context: vec![].into(),
             sync_log: false,
+            special_fields: protobuf::SpecialFields::new(),
         }];
 
         // Some errors can't be corrected
@@ -489,55 +494,61 @@ mod tests {
         init_logger();
         let entries_orig = vec![
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 1,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 2,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 3,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
         ];
 
         let entries_new = vec![
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 2,
-                data: vec![2, 2, 2],
-                context: vec![],
+                data: vec![2, 2, 2].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 3,
-                data: vec![2, 2, 2],
-                context: vec![],
+                data: vec![2, 2, 2].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 4,
-                data: vec![2, 2, 2],
-                context: vec![],
+                data: vec![2, 2, 2].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
         ];
 
@@ -591,39 +602,43 @@ mod tests {
         init_logger();
         let entries_orig = vec![
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 1,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 2,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
             Entry {
-                entry_type: 0,
+                entry_type: protobuf::EnumOrUnknown::from_i32(0),
                 term: 1,
                 index: 3,
-                data: vec![1, 1, 1],
-                context: vec![],
+                data: vec![1, 1, 1].into(),
+                context: vec![].into(),
                 sync_log: false,
+                special_fields: protobuf::SpecialFields::new(),
             },
         ];
 
         // change only the last entry
         let entries_new = vec![Entry {
-            entry_type: 0,
+            entry_type: protobuf::EnumOrUnknown::from_i32(0),
             term: 1,
             index: 3,
-            data: vec![2, 2, 2],
-            context: vec![],
+            data: vec![2, 2, 2].into(),
+            context: vec![].into(),
             sync_log: false,
+            special_fields: protobuf::SpecialFields::new(),
         }];
 
         let temp_dir = tempfile::tempdir().unwrap();

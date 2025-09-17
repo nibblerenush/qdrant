@@ -42,9 +42,8 @@ semver = { workspace = true }
 
 # Consensus related
 atomicwrites = { workspace = true }
+protobuf = { workspace = true }
 raft = { workspace = true }
-prost-for-raft = { workspace = true }
-protobuf = "2.28.0" # version of protobuf used by raft
 serde_cbor = { workspace = true }
 
 common = { path = "../common/common" }

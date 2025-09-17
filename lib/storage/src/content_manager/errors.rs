@@ -308,19 +308,10 @@ impl From<serde_json::Error> for StorageError {
     }
 }
 
-impl From<prost_for_raft::EncodeError> for StorageError {
-    fn from(err: prost_for_raft::EncodeError) -> Self {
+impl From<protobuf::Error> for StorageError {
+    fn from(err: protobuf::Error) -> Self {
         StorageError::ServiceError {
-            description: format!("prost encode error: {err}"),
-            backtrace: Some(Backtrace::force_capture().to_string()),
-        }
-    }
-}
-
-impl From<prost_for_raft::DecodeError> for StorageError {
-    fn from(err: prost_for_raft::DecodeError) -> Self {
-        StorageError::ServiceError {
-            description: format!("prost decode error: {err}"),
+            description: format!("protobuf error: {err}"),
             backtrace: Some(Backtrace::force_capture().to_string()),
         }
     }

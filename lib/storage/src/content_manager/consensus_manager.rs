@@ -244,7 +244,7 @@ impl<C: CollectionContainer> ConsensusManager<C> {
         let leader = soft_state.as_ref().map(|state| state.leader_id);
         let role = soft_state.as_ref().map(|state| state.raft_state.into());
         let peer_id = persistent.this_peer_id;
-        let is_voter = persistent.state.conf_state.get_voters().contains(&peer_id);
+        let is_voter = persistent.state.conf_state.voters().contains(&peer_id);
         ClusterStatus::Enabled(ClusterInfo {
             peer_id,
             peers,
@@ -335,7 +335,7 @@ impl<C: CollectionContainer> ConsensusManager<C> {
                 // Empty entry, when the peer becomes Leader it will send an empty entry.
                 false
             } else {
-                match entry.get_entry_type() {
+                match entry.entry_type() {
                     EntryType::EntryNormal => {
                         let operation_result = self.apply_normal_entry(&entry);
                         match operation_result {
@@ -397,7 +397,7 @@ impl<C: CollectionContainer> ConsensusManager<C> {
         entry: &RaftEntry,
         raw_node: &mut RawNode<T>,
     ) -> Result<bool, StorageError> {
-        let change: ConfChangeV2 = prost_for_raft::Message::decode(entry.get_data())?;
+        let change: ConfChangeV2 = protobuf::Message::parse_from_bytes(entry.data())?;
 
         let conf_state = raw_node.apply_conf_change(&change)?;
         log::debug!("Applied conf state {conf_state:?}");
@@ -409,7 +409,7 @@ impl<C: CollectionContainer> ConsensusManager<C> {
         for single_change in &change.changes {
             match single_change.change_type() {
                 ConfChangeType::AddNode => {
-                    let context = entry.get_context();
+                    let context = entry.context();
 
                     if !context.is_empty() {
                         let peer_uri = str::from_utf8(context)
@@ -440,9 +440,8 @@ impl<C: CollectionContainer> ConsensusManager<C> {
                 }
                 ConfChangeType::AddLearnerNode => {
                     log::debug!("Adding learner node {}", single_change.node_id);
-                    if let Ok(peer_uri) = String::from_utf8_lossy(entry.get_context())
-                        .deref()
-                        .try_into()
+                    if let Ok(peer_uri) =
+                        String::from_utf8_lossy(entry.context()).deref().try_into()
                     {
                         let peer_uri: Uri = peer_uri;
                         // Add peer to state
@@ -463,11 +462,11 @@ impl<C: CollectionContainer> ConsensusManager<C> {
                                 )
                             }
                         }
-                    } else if entry.get_context().is_empty() {
+                    } else if entry.context().is_empty() {
                         // Allow empty context for compatibility
                         log::warn!(
                             "Outdated peer addition entry found with index: {}",
-                            entry.get_index()
+                            entry.index()
                         )
                     } else {
                         // Should not be reachable as it is checked in API
@@ -543,14 +542,14 @@ impl<C: CollectionContainer> ConsensusManager<C> {
         &self,
         snapshot: &raft::eraftpb::Snapshot,
     ) -> Result<Result<(), StorageError>, StorageError> {
-        let meta = snapshot.get_metadata();
+        let meta = snapshot.metadata();
 
         let SnapshotData {
             collections_data,
             address_by_id,
             metadata_by_id,
             cluster_metadata,
-        } = snapshot.get_data().try_into()?;
+        } = snapshot.data().try_into()?;
 
         self.toc.apply_collections_snapshot(collections_data)?;
         self.wal.lock().clear()?;
@@ -883,14 +882,14 @@ fn recover_first_voter(
     for index in first_entry.index..last_entry.index + 1 {
         let entry = wal.entry(index)?;
 
-        match entry.get_entry_type() {
+        match entry.entry_type() {
             EntryType::EntryConfChangeV2 => {
-                let change: ConfChangeV2 = prost_for_raft::Message::decode(entry.get_data())?;
+                let change: ConfChangeV2 = protobuf::Message::parse_from_bytes(entry.data())?;
 
                 for change in change.changes {
-                    match change.get_change_type() {
+                    match change.change_type() {
                         ConfChangeType::AddNode | ConfChangeType::AddLearnerNode => {
-                            peers.remove(&change.get_node_id());
+                            peers.remove(&change.node_id());
                         }
 
                         ConfChangeType::RemoveNode => (),
@@ -903,11 +902,11 @@ fn recover_first_voter(
                     "Encountered deprecated ConfChange message while recovering first voter peer"
                 );
 
-                let change: ConfChange = prost_for_raft::Message::decode(entry.get_data())?;
+                let change: ConfChange = protobuf::Message::parse_from_bytes(entry.data())?;
 
-                match change.get_change_type() {
+                match change.change_type() {
                     ConfChangeType::AddNode | ConfChangeType::AddLearnerNode => {
-                        peers.remove(&change.get_node_id());
+                        peers.remove(&change.node_id());
                     }
 
                     ConfChangeType::RemoveNode => (),
@@ -1032,14 +1031,16 @@ impl<C: CollectionContainer> Storage for ConsensusManager<C> {
         };
 
         let meta = raft::eraftpb::SnapshotMetadata {
-            conf_state: Some(raft_state.conf_state.clone()),
+            conf_state: Some(raft_state.conf_state.clone()).into(),
             index,
             term,
+            special_fields: protobuf::SpecialFields::new(),
         };
 
         let snapshot = raft::eraftpb::Snapshot {
-            data: serde_cbor::to_vec(&data).map_err(raft_error_other)?,
-            metadata: Some(meta),
+            data: serde_cbor::to_vec(&data).map_err(raft_error_other)?.into(),
+            metadata: Some(meta).into(),
+            special_fields: protobuf::SpecialFields::new(),
         };
 
         Ok(snapshot)
@@ -1408,30 +1409,35 @@ mod tests {
 
         for &(change_type, node_id) in changes {
             conf_change.changes.push(ConfChangeSingle {
-                change_type: change_type as _,
+                change_type: change_type.into(),
                 node_id,
+                special_fields: protobuf::SpecialFields::new(),
             });
         }
 
         Entry {
             index,
-            entry_type: EntryType::EntryConfChangeV2 as _,
-            data: prost_for_raft::Message::encode_to_vec(&conf_change),
+            entry_type: EntryType::EntryConfChangeV2.into(),
+            data: protobuf::Message::write_to_bytes(&conf_change)
+                .unwrap()
+                .into(),
             ..Default::default()
         }
     }
 
     fn conf_change(index: u64, change_type: ConfChangeType, node_id: PeerId) -> Entry {
         let conf_change = ConfChange {
-            change_type: change_type as _,
+            change_type: change_type.into(),
             node_id,
             ..Default::default()
         };
 
         Entry {
             index,
-            entry_type: EntryType::EntryConfChange as _,
-            data: prost_for_raft::Message::encode_to_vec(&conf_change),
+            entry_type: EntryType::EntryConfChange.into(),
+            data: protobuf::Message::write_to_bytes(&conf_change)
+                .unwrap()
+                .into(),
             ..Default::default()
         }
     }
